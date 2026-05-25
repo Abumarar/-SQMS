@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Activity, Plus, X, AlertCircle, Users, CheckCircle2, Clock, Trash2, ArrowRight, Play } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { ArrowLeft, Activity, Plus, X, AlertCircle, Users, CheckCircle2, Clock, Trash2, ArrowRight, Play, LogOut } from "lucide-react";
 import { supabase } from "../../utils/supabase";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -22,6 +23,8 @@ type Ticket = {
 };
 
 export default function AdminDashboard() {
+  const router = useRouter();
+  const [authLoading, setAuthLoading] = useState(true);
   const [queues, setQueues] = useState<Queue[]>([]);
   const [loading, setLoading] = useState(true);
   
@@ -38,6 +41,20 @@ export default function AdminDashboard() {
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!session) {
+        router.push('/admin/login');
+      } else {
+        setAuthLoading(false);
+      }
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_OUT' || !session) {
+        router.push('/admin/login');
+      }
+    });
+
     fetchQueues();
     
     const channel = supabase
@@ -49,8 +66,9 @@ export default function AdminDashboard() {
 
     return () => {
       supabase.removeChannel(channel);
+      subscription.unsubscribe();
     };
-  }, []);
+  }, [router]);
 
   useEffect(() => {
     if (!selectedQueue) return;
@@ -171,6 +189,21 @@ export default function AdminDashboard() {
     }
   }
 
+  async function handleLogout() {
+    await supabase.auth.signOut();
+  }
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-color-background flex items-center justify-center">
+        <div className="text-purple-500 animate-pulse flex flex-col items-center">
+          <Activity className="w-10 h-10 mb-4" />
+          <p className="font-medium">Verifying Secure Access...</p>
+        </div>
+      </div>
+    );
+  }
+
   if (selectedQueue) {
     const servingTickets = tickets.filter(t => t.status === 'serving');
     const waitingTickets = tickets.filter(t => t.status === 'waiting');
@@ -193,6 +226,10 @@ export default function AdminDashboard() {
                 <span className="text-xs text-gray-400">{selectedQueue.location || 'No location set'}</span>
               </div>
             </div>
+            
+            <button onClick={handleLogout} className="text-gray-400 hover:text-red-400 transition-colors flex items-center bg-white/5 px-4 py-2 rounded-lg hover:bg-white/10 text-sm font-medium ml-4">
+              <LogOut className="w-4 h-4 mr-2" /> Logout
+            </button>
           </div>
         </header>
 
@@ -356,6 +393,10 @@ export default function AdminDashboard() {
               Admin Dashboard
             </div>
           </div>
+          
+          <button onClick={handleLogout} className="text-gray-400 hover:text-red-400 transition-colors flex items-center bg-white/5 px-4 py-2 rounded-lg hover:bg-white/10 text-sm font-medium ml-4">
+            <LogOut className="w-4 h-4 mr-2" /> Logout
+          </button>
         </div>
       </header>
 
